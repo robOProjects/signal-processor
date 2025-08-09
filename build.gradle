@@ -9,12 +9,14 @@ repositories {
 }
 
 dependencies {
+    implementation 'io.quarkus:quarkus-smallrye-context-propagation'
+    implementation 'io.quarkus:quarkus-rest-jackson'
     implementation enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}")
-    implementation 'io.quarkus:quarkus-rest'
-    implementation 'io.quarkiverse.artemis:quarkus-artemis-core:3.8.4'
     implementation 'io.quarkus:quarkus-messaging-amqp'
-    implementation 'io.quarkiverse.helm:quarkus-helm:1.2.7'
+    implementation 'io.quarkus:quarkus-rest'
     implementation 'io.quarkus:quarkus-arc'
+    implementation 'jakarta.json:jakarta.json-api'
+    implementation 'org.eclipse.parsson:parsson' // Jakarta JSON implementation
     testImplementation 'io.quarkus:quarkus-junit5'
     testImplementation 'io.rest-assured:rest-assured'
 }
