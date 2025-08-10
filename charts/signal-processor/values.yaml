@@ -1,0 +1,43 @@
+ingress:
+livenessProbe:
+autoscaling:
+tolerations: []
+affinity: {}
+
+# Minimal values.yaml for signal-processor Helm chart
+quarkus:
+  http:
+    port: 8081
+  log:
+    level: INFO
+amqp:
+  host: localhost
+  port: 5672
+  # username and password are now stored in a Kubernetes Secret, not here
+  maxInflight: 10000
+  outgoing:
+    dynamicSender:
+      address: test-topic
+  incoming:
+    testConsumer:
+      address: test-topic
+    jacksonTopicConsumer:
+      address: test-jackson-topic
+    jacksonConfirmedConsumer:
+      address: test-jackson-confirmed-topic
+    jacksonSyncConsumer:
+      address: test-jackson-sync-topic
+    jakartaTopicConsumer:
+      address: test-jakarta-topic
+    customerNotificationsConsumer:
+      address: customer-notifications
+    userLoginsConsumer:
+      address: user-logins
+    userPurchasesConsumer:
+      address: user-purchases
+    supportRequestsConsumer:
+      address: support-requests
+    userActivitiesConsumer:
+      address: user-activities
+    orderEventsConsumer:
+      address: order-events
