@@ -5,10 +5,11 @@ import java.util.concurrent.CompletionStage;
 import org.signal.processor.amqp.DynamicAmqpMessagingService;
 import org.signal.processor.dto.BatchRequest;
 import org.signal.processor.dto.DynamicAmqpRequest;
-import org.signal.processor.dto.LoggingConfig;
 import org.signal.processor.dto.PrewarmRequest;
 import org.signal.processor.dto.TestMessage;
 import org.signal.processor.utils.TestMessageConsumer;
+import org.signal.processor.subscribers.MessageSubscriberService;
+import org.signal.processor.subscribers.DynamicTopicTrackingService;
 
 import jakarta.inject.Inject;
 import jakarta.json.Json;
@@ -26,7 +27,6 @@ import jakarta.ws.rs.core.Response;
  * <p>
  * Provides endpoints for sending messages to dynamically specified AMQP topics,
  * performing health checks, retrieving messaging and consumer statistics,
- * configuring logging,
  * pre-warming topics, and sending message batches.
  * </p>
  * <ul>
@@ -38,8 +38,6 @@ import jakarta.ws.rs.core.Response;
  * emitter state.</li>
  * <li><b>/amqp-dynamic/consumer-stats</b>: Returns statistics about received
  * messages.</li>
- * <li><b>/amqp-dynamic/configure-logging</b>: Configures logging verbosity and
- * interval.</li>
  * <li><b>/amqp-dynamic/prewarm-topics</b>: Pre-warms AMQP topics for
  * performance optimization.</li>
  * <li><b>/amqp-dynamic/send</b>: Sends a message to a specified topic
@@ -62,6 +60,12 @@ public class DynamicAmqpResource {
 
     @Inject
     private TestMessageConsumer testConsumer;
+
+    @Inject
+    private MessageSubscriberService subscriberService;
+
+    @Inject
+    private DynamicTopicTrackingService dynamicTopicTracker;
 
     /**
      * Test endpoint to verify that the service is operational.
@@ -112,28 +116,16 @@ public class DynamicAmqpResource {
         String statsJson = String.format(
                 "{\"messagesSent\":%d,\"messagesFailed\":%d,\"successRate\":%.2f," +
                         "\"lastSuccessfulSend\":\"%s\",\"lastFailure\":\"%s\",\"emitterReady\":%b," +
-                        "\"cachedTopics\":%d,\"verboseLoggingEnabled\":%b}",
+                        "\"cachedTopics\":%d}",
                 stats.messagesSent(),
                 stats.messagesFailed(),
                 stats.getSuccessRate(),
                 stats.lastSuccessfulSend(),
                 stats.lastFailure(),
                 emitterReady,
-                stats.cachedTopics(),
-                stats.verboseLoggingEnabled());
+                stats.cachedTopics());
 
         return Response.ok(statsJson).build();
-    }
-
-    /**
-     * Configures logging behavior for performance optimization.
-     */
-    @POST
-    @Path("/configure-logging")
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response configureLogging(LoggingConfig config) {
-        messagingService.configureLogging(config.enableVerbose(), config.logInterval());
-        return Response.ok("Logging configuration updated").build();
     }
 
     /**
@@ -189,6 +181,121 @@ public class DynamicAmqpResource {
                 stats.topicCounts().toString());
 
         return Response.ok(statsJson).build();
+    }
+
+    /**
+     * Comprehensive subscriber statistics endpoint showing all received message
+     * metrics.
+     * This includes all topics being monitored by the MessageSubscriberService.
+     *
+     * @return a Response with comprehensive subscriber statistics
+     */
+    @GET
+    @Path("/subscriber-stats")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getSubscriberStats() {
+        var stats = subscriberService.getSubscriberStats();
+
+        // Build a comprehensive JSON response
+        StringBuilder json = new StringBuilder();
+        json.append("{");
+        json.append("\"totalMessagesReceived\":").append(stats.totalMessagesReceived()).append(",");
+        json.append("\"messageCountsByTopic\":{");
+
+        boolean first = true;
+        for (var entry : stats.messageCountsByTopic().entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":").append(entry.getValue());
+            first = false;
+        }
+        json.append("},");
+
+        json.append("\"lastMessagePerTopic\":{");
+        first = true;
+        for (var entry : stats.lastMessagePerTopic().entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":\"")
+                    .append(entry.getValue().replace("\"", "\\\"")).append("\"");
+            first = false;
+        }
+        json.append("},");
+
+        json.append("\"lastTimestampPerTopic\":{");
+        first = true;
+        for (var entry : stats.lastTimestampPerTopic().entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":\"").append(entry.getValue()).append("\"");
+            first = false;
+        }
+        json.append("}");
+        json.append("}");
+
+        return Response.ok(json.toString()).build();
+    }
+
+    /**
+     * Dynamic topic statistics endpoint showing usage of topics created on the fly.
+     * This tracks messages sent to any topic name dynamically.
+     *
+     * @return a Response with dynamic topic statistics
+     */
+    @GET
+    @Path("/dynamic-topic-stats")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getDynamicTopicStats() {
+        var stats = dynamicTopicTracker.getDynamicTopicStats();
+
+        // Build a comprehensive JSON response for dynamic topics
+        StringBuilder json = new StringBuilder();
+        json.append("{");
+        json.append("\"totalDynamicMessages\":").append(stats.totalDynamicMessages()).append(",");
+
+        json.append("\"topicMessageCounts\":{");
+        boolean first = true;
+        for (var entry : stats.topicMessageCounts().entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":").append(entry.getValue());
+            first = false;
+        }
+        json.append("},");
+
+        json.append("\"lastMessagePerTopic\":{");
+        first = true;
+        for (var entry : stats.lastMessagePerTopic().entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":\"")
+                    .append(entry.getValue().replace("\"", "\\\"")).append("\"");
+            first = false;
+        }
+        json.append("},");
+
+        json.append("\"lastSentTimestamp\":{");
+        first = true;
+        for (var entry : stats.lastSentTimestamp().entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":\"").append(entry.getValue()).append("\"");
+            first = false;
+        }
+        json.append("},");
+
+        json.append("\"trackedTopics\":{");
+        first = true;
+        for (var entry : stats.trackedTopics().entrySet()) {
+            if (!first)
+                json.append(",");
+            json.append("\"").append(entry.getKey()).append("\":").append(entry.getValue());
+            first = false;
+        }
+        json.append("}");
+        json.append("}");
+
+        return Response.ok(json.toString()).build();
     }
 
     /**
@@ -322,7 +429,7 @@ public class DynamicAmqpResource {
     }
 
     /**
-     * Demo endpoint that shows different JSON approaches.
+     * Demo endpoint that shows different JSON approaches and logging configuration.
      */
     @GET
     @Path("/json-examples")
@@ -348,6 +455,10 @@ public class DynamicAmqpResource {
                    - Body: {"id": "test", "content": "Hello", "timestamp": 123456, "priority": 1}
 
                 All methods support both String and JSON payloads for maximum flexibility.
+
+                DEBUG LOGGING CONFIGURATION:
+                To see debug messages, set in application.properties:
+                quarkus.log.category."org.signal.processor.amqp.DynamicAmqpMessagingService".level=DEBUG
                 """;
 
         return Response.ok().entity(examples).build();

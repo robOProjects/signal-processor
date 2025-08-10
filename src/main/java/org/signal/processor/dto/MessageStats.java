@@ -8,8 +8,7 @@ public record MessageStats(
         long messagesFailed,
         String lastSuccessfulSend,
         String lastFailure,
-        int cachedTopics,
-        boolean verboseLoggingEnabled) {
+        int cachedTopics) {
 
     public double getSuccessRate() {
         long total = messagesSent + messagesFailed;

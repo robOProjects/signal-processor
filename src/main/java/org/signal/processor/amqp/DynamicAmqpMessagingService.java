@@ -17,6 +17,8 @@ import org.signal.processor.dto.MessageStats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.signal.processor.subscribers.DynamicTopicTrackingService;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -75,6 +77,9 @@ public class DynamicAmqpMessagingService {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    DynamicTopicTrackingService dynamicTopicTracker;
+
     // Message tracking
     private final AtomicLong messagesSentCount = new AtomicLong(0);
     private final AtomicLong messagesFailedCount = new AtomicLong(0);
@@ -83,10 +88,6 @@ public class DynamicAmqpMessagingService {
 
     // Cache metadata objects to avoid repeated creation
     private final ConcurrentHashMap<String, Metadata> metadataCache = new ConcurrentHashMap<>();
-
-    // Configuration for logging frequency
-    private volatile boolean enableVerboseLogging = true;
-    private volatile int logEveryNthMessage = 1; // Default: log every message
 
     // Thread-local formatter to avoid synchronization overhead
     private static final ThreadLocal<DateTimeFormatter> FORMATTER = ThreadLocal
@@ -101,21 +102,7 @@ public class DynamicAmqpMessagingService {
                 messagesFailedCount.get(),
                 lastSuccessfulSend,
                 lastFailure,
-                metadataCache.size(),
-                enableVerboseLogging);
-    }
-
-    /**
-     * Configures logging behavior for performance tuning.
-     * 
-     * @param enableVerbose whether to enable detailed logging
-     * @param logInterval   log every Nth message (1 = every message, 100 = every
-     *                      100th)
-     */
-    public void configureLogging(boolean enableVerbose, int logInterval) {
-        this.enableVerboseLogging = enableVerbose;
-        this.logEveryNthMessage = Math.max(1, logInterval);
-        logger.info("📝 Logging configured: verbose={}, interval={}", enableVerbose, logInterval);
+                metadataCache.size());
     }
 
     /**
@@ -186,44 +173,43 @@ public class DynamicAmqpMessagingService {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Message cannot be null"));
         }
 
-        try {
-            // Get cached metadata or create new one (performance optimization)
-            Metadata metadata = metadataCache.computeIfAbsent(topic,
-                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+        // Chain reactive operations: track first, then send
+        return dynamicTopicTracker.trackTopicUsage(topic, message)
+                .subscribeAsCompletionStage()
+                .thenCompose(ignored -> {
+                    try {
+                        // Get cached metadata or create new one (performance optimization)
+                        Metadata metadata = metadataCache.computeIfAbsent(topic,
+                                t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
 
-            // Create message with cached metadata
-            Message<String> amqpMessage = Message.of(message).withMetadata(metadata);
+                        // Create message with cached metadata
+                        Message<String> amqpMessage = Message.of(message).withMetadata(metadata);
 
-            // Send the message - emitter.send() is fire-and-forget
-            emitter.send(amqpMessage);
+                        // Send the message - emitter.send() is fire-and-forget
+                        emitter.send(amqpMessage);
 
-            // Update tracking
-            long count = messagesSentCount.incrementAndGet();
-            String timestamp = LocalDateTime.now().format(FORMATTER.get());
-            lastSuccessfulSend = timestamp;
+                        // Update tracking
+                        long count = messagesSentCount.incrementAndGet();
+                        String timestamp = LocalDateTime.now().format(FORMATTER.get());
+                        lastSuccessfulSend = timestamp;
 
-            // Configurable logging to reduce I/O overhead
-            if (enableVerboseLogging && (count % logEveryNthMessage == 0)) {
-                logger.info("[{}] Message QUEUED for topic: {} (Total queued: {}) - DELIVERY NOT CONFIRMED",
-                        timestamp, topic, count);
-                if (count % logEveryNthMessage == 0 && logEveryNthMessage > 1) {
-                    logger.info("📊 Processed {} messages (cached topics: {})", count, metadataCache.size());
-                }
-            }
+                        // Debug logging (controlled by logging framework configuration)
+                        logger.debug("[{}] Message QUEUED for topic: {} (Total queued: {}) - DELIVERY NOT CONFIRMED",
+                                timestamp, topic, count);
 
-            // WARNING: This only means the message was queued, not delivered!
-            return CompletableFuture.completedFuture(null);
-        } catch (Exception e) {
-            String timestamp = LocalDateTime.now().format(FORMATTER.get());
-            messagesFailedCount.incrementAndGet();
-            lastFailure = timestamp + " - " + e.getMessage();
+                        // WARNING: This only means the message was queued, not delivered!
+                        return CompletableFuture.completedFuture(null);
+                    } catch (Exception e) {
+                        String timestamp = LocalDateTime.now().format(FORMATTER.get());
+                        messagesFailedCount.incrementAndGet();
+                        lastFailure = timestamp + " - " + e.getMessage();
 
-            if (enableVerboseLogging) {
-                logger.error("[{}] Failed to queue message: {} (Total failed: {})",
-                        timestamp, e.getMessage(), messagesFailedCount.get());
-            }
-            return CompletableFuture.failedFuture(e);
-        }
+                        // Error messages should always be logged, regardless of enableVerboseLogging
+                        logger.error("[{}] Failed to queue message: {} (Total failed: {})",
+                                timestamp, e.getMessage(), messagesFailedCount.get());
+                        return CompletableFuture.failedFuture(e);
+                    }
+                });
     }
 
     /**
@@ -292,9 +278,7 @@ public class DynamicAmqpMessagingService {
 
         try {
             String timestamp = LocalDateTime.now().format(FORMATTER.get());
-            if (enableVerboseLogging) {
-                logger.info("[{}] Sending message with confirmation to topic: {}", timestamp, topic);
-            }
+            logger.debug("[{}] Sending message with confirmation to topic: {}", timestamp, topic);
 
             CompletableFuture<Void> deliveryFuture = new CompletableFuture<>();
 
@@ -306,9 +290,7 @@ public class DynamicAmqpMessagingService {
             Message<String> amqpMessage = Message.of(message)
                     .withMetadata(baseMetadata)
                     .withAck(() -> {
-                        if (enableVerboseLogging) {
-                            System.out.println("✅ Message CONFIRMED delivered to topic: " + topic);
-                        }
+                        logger.debug("✅ Message CONFIRMED delivered to topic: {}", topic);
                         deliveryFuture.complete(null);
                         return CompletableFuture.completedFuture(null);
                     })
@@ -317,9 +299,8 @@ public class DynamicAmqpMessagingService {
                     .withNack(reason -> {
                         String error = "Message delivery FAILED for topic: " + topic + ", reason: "
                                 + reason.getMessage();
-                        if (enableVerboseLogging) {
-                            System.err.println("❌ " + error);
-                        }
+                        // Error messages should always be logged
+                        logger.error("❌ {}", error);
                         deliveryFuture.completeExceptionally(new RuntimeException(error, reason));
                         return CompletableFuture.completedFuture(null);
                     });
@@ -341,9 +322,8 @@ public class DynamicAmqpMessagingService {
             messagesFailedCount.incrementAndGet();
             lastFailure = timestamp + " - " + e.getMessage();
 
-            if (enableVerboseLogging) {
-                System.err.println("[" + timestamp + "] Failed to send message with confirmation: " + e.getMessage());
-            }
+            // Error messages should always be logged
+            logger.error("[{}] Failed to send message with confirmation: {}", timestamp, e.getMessage());
             return CompletableFuture.failedFuture(e);
         }
     }
@@ -624,10 +604,8 @@ public class DynamicAmqpMessagingService {
             String timestamp = LocalDateTime.now().format(FORMATTER.get());
             lastSuccessfulSend = timestamp;
 
-            if (enableVerboseLogging) {
-                System.out.printf("[%s] Batch sent %d messages to topic: %s (Total: %d)%n",
-                        timestamp, messages.length, topic, messagesSentCount.get());
-            }
+            logger.debug("[{}] Batch sent {} messages to topic: {} (Total: {})",
+                    timestamp, messages.length, topic, messagesSentCount.get());
 
             return CompletableFuture.completedFuture(null);
 
@@ -636,9 +614,8 @@ public class DynamicAmqpMessagingService {
             messagesFailedCount.addAndGet(messages.length);
             lastFailure = timestamp + " - " + e.getMessage();
 
-            if (enableVerboseLogging) {
-                System.err.printf("[%s] Failed to send batch: %s%n", timestamp, e.getMessage());
-            }
+            // Error messages should always be logged
+            logger.error("[{}] Failed to send batch: {}", timestamp, e.getMessage());
             return CompletableFuture.failedFuture(e);
         }
     }
@@ -650,6 +627,6 @@ public class DynamicAmqpMessagingService {
     public void clearMetadataCache() {
         int size = metadataCache.size();
         metadataCache.clear();
-        System.out.printf("🧹 Cleared metadata cache (%d entries)%n", size);
+        logger.info("🧹 Cleared metadata cache ({} entries)", size);
     }
 }

@@ -4,6 +4,9 @@ import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Metadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.smallrye.reactive.messaging.amqp.OutgoingAmqpMetadata;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -27,6 +30,8 @@ import java.util.concurrent.atomic.LongAdder;
  */
 @ApplicationScoped
 public class HighPerformanceAmqpMessagingService {
+
+    private static final Logger logger = LoggerFactory.getLogger(HighPerformanceAmqpMessagingService.class);
 
     @Inject
     @Channel("dynamic-sender")
@@ -65,13 +70,13 @@ public class HighPerformanceAmqpMessagingService {
 
             // Conditional logging to reduce I/O overhead
             if (enableDetailedLogging && (count % logEveryNthMessage == 0)) {
-                System.out.printf("📊 Sent %d messages (current topic: %s)%n", count, topic);
+                logger.info("📊 Sent {} messages (current topic: {})", count, topic);
             }
 
         } catch (Exception e) {
             messagesFailedCount.increment();
             if (enableDetailedLogging) {
-                System.err.printf("❌ Failed to send message to %s: %s%n", topic, e.getMessage());
+                logger.error("❌ Failed to send message to {}: {}", topic, e.getMessage());
             }
         }
     }
@@ -98,13 +103,13 @@ public class HighPerformanceAmqpMessagingService {
             }
 
             if (enableDetailedLogging) {
-                System.out.printf("📦 Batch sent %d messages to topic: %s%n", messages.length, topic);
+                logger.info("📦 Batch sent {} messages to topic: {}", messages.length, topic);
             }
 
         } catch (Exception e) {
             messagesFailedCount.add(messages.length);
             if (enableDetailedLogging) {
-                System.err.printf("❌ Failed to send batch to %s: %s%n", topic, e.getMessage());
+                logger.error("❌ Failed to send batch to {}: {}", topic, e.getMessage());
             }
         }
     }
@@ -124,7 +129,7 @@ public class HighPerformanceAmqpMessagingService {
             metadataCache.computeIfAbsent(topic,
                     t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
         }
-        System.out.printf("🔥 Pre-warmed %d topics in metadata cache%n", topics.length);
+        logger.info("🔥 Pre-warmed {} topics in metadata cache", topics.length);
     }
 
     /**
@@ -133,7 +138,7 @@ public class HighPerformanceAmqpMessagingService {
     public void clearMetadataCache() {
         int size = metadataCache.size();
         metadataCache.clear();
-        System.out.printf("🧹 Cleared metadata cache (%d entries)%n", size);
+        logger.info("🧹 Cleared metadata cache ({} entries)", size);
     }
 
     /**
@@ -154,7 +159,7 @@ public class HighPerformanceAmqpMessagingService {
     public void configurePerformance(boolean enableLogging, int logInterval) {
         this.enableDetailedLogging = enableLogging;
         this.logEveryNthMessage = logInterval;
-        System.out.printf("⚙️ Performance configured: logging=%b, interval=%d%n",
+        logger.info("⚙️ Performance configured: logging={}, interval={}",
                 enableLogging, logInterval);
     }
 
