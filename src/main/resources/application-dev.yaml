@@ -1,0 +1,9 @@
+# application-dev.yaml (for development)
+mp:
+  messaging:
+    connector:
+      smallrye-amqp:
+        host: localhost
+        port: 5672
+        username: ${AMQP_USERNAME:dev-user}
+        password: ${AMQP_PASSWORD:dev-pass}

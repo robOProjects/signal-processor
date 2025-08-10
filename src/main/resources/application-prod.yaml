@@ -1,0 +1,12 @@
+# application-prod.yaml (for production)
+mp:
+  messaging:
+    connector:
+      smallrye-amqp:
+        host: ${AMQP_HOST:amqp.production.com}
+        port: ${AMQP_PORT:5672}
+        username: ${AMQP_USERNAME}
+        password: ${AMQP_PASSWORD}
+        use-ssl: true
+        ssl:
+          trust-all: false

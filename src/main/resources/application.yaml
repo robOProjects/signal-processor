@@ -14,8 +14,8 @@ mp:
       smallrye-amqp:
         host: localhost
         port: 5672
-        username: admin
-        password: admin
+        username: ${AMQP_USERNAME:admin}
+        password: ${AMQP_PASSWORD:admin}
         max-inflight-messages: 10000
         use-nio: true
         connect-timeout: 60000

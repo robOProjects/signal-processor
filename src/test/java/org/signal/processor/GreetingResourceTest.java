@@ -10,11 +10,7 @@ import static org.hamcrest.CoreMatchers.is;
 class GreetingResourceTest {
     @Test
     void testHelloEndpoint() {
-        given()
-          .when().get("/amqp-dynamic/hello")
-          .then()
-             .statusCode(200)
-             .body(is("Hello from Quarkus REST"));
+        given().when().get("/amqp-dynamic/hello").then().statusCode(200).body(is("Hello from Quarkus REST"));
     }
 
 }
