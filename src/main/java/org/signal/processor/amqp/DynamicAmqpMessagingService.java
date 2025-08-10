@@ -444,80 +444,6 @@ public class DynamicAmqpMessagingService {
     }
 
     /**
-     * Sends a message to the specified AMQP topic synchronously with
-     * fire-and-forget behavior.
-     * <p>
-     * This method only waits for the message to be queued locally, not for broker
-     * delivery. Use this when you want synchronous API but don't need delivery
-     * confirmation.
-     * </p>
-     *
-     * @param topic   the name of the topic to send the message to
-     * @param message the message content to send
-     * @throws RuntimeException if the message cannot be queued
-     */
-    public void sendMessageSyncFireAndForget(String topic, String message) {
-        try {
-            // This completes immediately after queuing
-            sendMessage(topic, message).toCompletableFuture().join();
-            logger.debug("Message queued for topic: {}", topic);
-        }
-        catch (Exception e) {
-            logger.error("Failed to queue message for topic {}: {}", topic, e.getMessage());
-            throw new RuntimeException("Failed to queue message for topic: " + topic, e);
-        }
-    }
-
-    /**
-     * Sends a Jackson-serializable object as JSON synchronously (fire-and-forget).
-     * <p>
-     * This method converts the object to JSON and waits only for local queuing, not
-     * for broker delivery confirmation.
-     * </p>
-     * 
-     * @param <T>    the type of object to serialize
-     * @param topic  the name of the topic to send the message to
-     * @param object the object to serialize and send as JSON
-     * @throws IllegalArgumentException if topic is null/empty or object is null
-     * @throws RuntimeException         if JSON serialization fails or queuing fails
-     */
-    public <T> void sendMessageSyncFireAndForget(String topic, T object) {
-        if (object == null) {
-            throw new IllegalArgumentException("Object cannot be null");
-        }
-
-        try {
-            String jsonMessage = objectMapper.writeValueAsString(object);
-            sendMessageSyncFireAndForget(topic, jsonMessage);
-        }
-        catch (JsonProcessingException e) {
-            logger.error("Failed to serialize object to JSON for topic: {}", topic, e);
-            throw new RuntimeException("JSON serialization failed", e);
-        }
-    }
-
-    /**
-     * Sends a Jakarta JsonObject synchronously (fire-and-forget).
-     * <p>
-     * This method converts the Jakarta JsonObject to string and waits only for
-     * local queuing, not for broker delivery confirmation. Supports legacy code
-     * using Jakarta JSON.
-     * </p>
-     * 
-     * @param topic      the name of the topic to send the message to
-     * @param jsonObject the Jakarta JsonObject to send
-     * @throws IllegalArgumentException if topic is null/empty or jsonObject is null
-     * @throws RuntimeException         if queuing fails
-     */
-    public void sendMessageSyncFireAndForget(String topic, JsonObject jsonObject) {
-        if (jsonObject == null) {
-            throw new IllegalArgumentException("JsonObject cannot be null");
-        }
-
-        sendMessageSyncFireAndForget(topic, jsonObject.toString());
-    }
-
-    /**
      * Sends a message using a request object.
      * <p>
      * Convenience method that accepts a {@link DynamicAmqpRequest} object. Uses
@@ -540,29 +466,27 @@ public class DynamicAmqpMessagingService {
                 📨 AMQP Message Sending Methods Available:
 
                 1. sendMessage(topic, message) - FIRE-AND-FORGET
-                   ✅ Returns immediately after queuing
+                   ✅ Returns immediately after queuing (async)
                    ❌ No delivery confirmation
                    🎯 Use for: High throughput, non-critical messages
+                   💡 For sync: call .toCompletableFuture().join()
 
                 2. sendMessageWithConfirmation(topic, message) - WITH DELIVERY CONFIRMATION
                    ⏳ Waits for broker acknowledgment (up to 30s timeout)
-                   ✅ Real delivery confirmation
+                   ✅ Real delivery confirmation (async)
                    🎯 Use for: Critical messages, when you need delivery guarantee
 
                 3. sendMessageSync(topic, message) - SYNCHRONOUS WITH CONFIRMATION
                    ⏳ Blocks until delivery is confirmed
-                   ✅ Real delivery confirmation
+                   ✅ Real delivery confirmation (sync wrapper)
                    🎯 Use for: Traditional synchronous APIs, critical messages
 
-                4. sendMessageSyncFireAndForget(topic, message) - SYNCHRONOUS QUEUING ONLY
-                   ⏳ Blocks until queued (immediate)
-                   ❌ No delivery confirmation
-                   🎯 Use for: Synchronous APIs where queuing is sufficient
-
-                5. sendMessageBatch(topic, messages[]) - BATCH FIRE-AND-FORGET
+                4. sendMessageBatch(topic, messages[]) - BATCH FIRE-AND-FORGET
                    ✅ Efficient for multiple messages to same topic
                    ❌ No delivery confirmation
                    🎯 Use for: Bulk operations, high throughput
+
+                Note: All methods support String, Object (JSON), and JsonObject types.
                 """;
     }
 
