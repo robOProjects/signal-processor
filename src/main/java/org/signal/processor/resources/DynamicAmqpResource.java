@@ -79,6 +79,18 @@ public class DynamicAmqpResource {
     }
 
     /**
+     * Simple hello endpoint for basic connectivity testing.
+     *
+     * @return a plain text "Hello from Quarkus REST" message
+     */
+    @GET
+    @Path("/hello")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "Hello from Quarkus REST";
+    }
+
+    /**
      * Health check endpoint that tests actual AMQP connectivity.
      *
      * @return a Response indicating AMQP health status
