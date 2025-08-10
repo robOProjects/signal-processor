@@ -31,10 +31,9 @@ import jakarta.json.JsonObject;
  * Service for sending messages to dynamic AMQP topics.
  * <p>
  * This service provides a programmatic API for sending messages to dynamically
- * specified
- * AMQP topics using the SmallRye Reactive Messaging API. It can be injected
- * into any
- * CDI-managed class and used for asynchronous message sending.
+ * specified AMQP topics using the SmallRye Reactive Messaging API. It can be
+ * injected into any CDI-managed class and used for asynchronous message
+ * sending.
  * </p>
  * 
  * <p>
@@ -47,8 +46,7 @@ import jakarta.json.JsonObject;
  * 
  * // Send a message
  * messagingService.sendMessage("my-topic", "Hello World!")
- *         .thenAccept(result -> logger.info("Message sent successfully"))
- *         .exceptionally(throwable -> {
+ *         .thenAccept(result -> logger.info("Message sent successfully")).exceptionally(throwable -> {
  *             logger.error("Failed to send message: {}", throwable.getMessage());
  *             return null;
  *         });
@@ -65,12 +63,10 @@ public class DynamicAmqpMessagingService {
     @Channel("dynamic-sender")
     /**
      * Emitter instance used to send messages of type {@code String} to an AMQP
-     * messaging channel.
-     * It is not sending messages directly but rather publishing them to a channel
-     * for processing. A channel is a logical stream of messages that can be
-     * processed independently. The broker
-     * is responsible for routing messages to the appropriate consumers based on the
-     * topic and other metadata.
+     * messaging channel. It is not sending messages directly but rather publishing
+     * them to a channel for processing. A channel is a logical stream of messages
+     * that can be processed independently. The broker is responsible for routing
+     * messages to the appropriate consumers based on the topic and other metadata.
      */
     private Emitter<String> emitter;
 
@@ -97,66 +93,64 @@ public class DynamicAmqpMessagingService {
      * Gets statistics about message sending.
      */
     public MessageStats getMessageStats() {
-        return new MessageStats(
-                messagesSentCount.get(),
-                messagesFailedCount.get(),
-                lastSuccessfulSend,
-                lastFailure,
+        return new MessageStats(messagesSentCount.get(), messagesFailedCount.get(), lastSuccessfulSend, lastFailure,
                 metadataCache.size());
     }
 
     /**
-     * Pre-warms the metadata cache for frequently used topics.
-     * Call this method with your common topics to improve performance.
+     * Pre-warms the metadata cache for frequently used topics. Call this method
+     * with your common topics to improve performance.
      */
     public void preWarmTopics(String... topics) {
         for (String topic : topics) {
             metadataCache.computeIfAbsent(topic,
-                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).withDurable(true).build()));
         }
         logger.info("🔥 Pre-warmed {} topics in cache", topics.length);
     }
 
     /**
-     * Checks if the emitter is ready to send messages.
-     * Note: This doesn't guarantee the broker connection is healthy,
-     * but indicates if the emitter is in a failed state.
+     * Checks if the emitter is ready to send messages. Note: This doesn't guarantee
+     * the broker connection is healthy, but indicates if the emitter is in a failed
+     * state.
      */
     public boolean isEmitterReady() {
         try {
             return !emitter.isCancelled() && !emitter.hasRequests();
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.warn("Error checking emitter status: {}", e.getMessage());
             return false;
         }
     }
 
     /**
-     * Performs a simple health check by attempting to send a test message.
-     * This is the most reliable way to verify end-to-end connectivity.
+     * Performs a simple health check by attempting to send a test message. This is
+     * the most reliable way to verify end-to-end connectivity.
      */
     public CompletionStage<Boolean> performHealthCheck() {
         String testTopic = "health-check-" + System.currentTimeMillis();
         String testMessage = "Health check at " + LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
-        return sendMessage(testTopic, testMessage)
-                .thenApply(result -> {
-                    logger.info("Health check successful - AMQP connection is working");
-                    return true;
-                })
-                .exceptionally(throwable -> {
-                    logger.error("Health check failed: {}", throwable.getMessage());
-                    return false;
-                });
+        return sendMessage(testTopic, testMessage).thenApply(result -> {
+            logger.info("Health check successful - AMQP connection is working");
+            return true;
+        }).exceptionally(throwable -> {
+            logger.error("Health check failed: {}", throwable.getMessage());
+            return false;
+        });
     }
 
     /**
      * Sends a message to the specified AMQP topic with acknowledgment handling.
      * <p>
      * IMPORTANT: The emitter.send() is fire-and-forget. This method returns
-     * immediately
-     * after queuing the message, NOT after successful broker delivery.
+     * immediately after queuing the message, NOT after successful broker delivery.
      * For real delivery confirmation, use sendMessageWithConfirmation() instead.
+     * </p>
+     * <p>
+     * DURABILITY: Dynamic topics are automatically created as DURABLE, meaning they
+     * will survive broker restarts and messages will be persisted to disk.
      * </p>
      * 
      * @param topic   the name of the topic to send the message to
@@ -174,42 +168,41 @@ public class DynamicAmqpMessagingService {
         }
 
         // Chain reactive operations: track first, then send
-        return dynamicTopicTracker.trackTopicUsage(topic, message)
-                .subscribeAsCompletionStage()
-                .thenCompose(ignored -> {
-                    try {
-                        // Get cached metadata or create new one (performance optimization)
-                        Metadata metadata = metadataCache.computeIfAbsent(topic,
-                                t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+        return dynamicTopicTracker.trackTopicUsage(topic, message).subscribeAsCompletionStage().thenCompose(ignored -> {
+            try {
+                // Get cached metadata or create new one (performance optimization)
+                Metadata metadata = metadataCache.computeIfAbsent(topic,
+                        t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).withDurable(true).build()));
 
-                        // Create message with cached metadata
-                        Message<String> amqpMessage = Message.of(message).withMetadata(metadata);
+                // Create message with cached metadata
+                Message<String> amqpMessage = Message.of(message).withMetadata(metadata);
 
-                        // Send the message - emitter.send() is fire-and-forget
-                        emitter.send(amqpMessage);
+                // Send the message - emitter.send() is fire-and-forget
+                emitter.send(amqpMessage);
 
-                        // Update tracking
-                        long count = messagesSentCount.incrementAndGet();
-                        String timestamp = LocalDateTime.now().format(FORMATTER.get());
-                        lastSuccessfulSend = timestamp;
+                // Update tracking
+                long count = messagesSentCount.incrementAndGet();
+                String timestamp = LocalDateTime.now().format(FORMATTER.get());
+                lastSuccessfulSend = timestamp;
 
-                        // Debug logging (controlled by logging framework configuration)
-                        logger.debug("[{}] Message QUEUED for topic: {} (Total queued: {}) - DELIVERY NOT CONFIRMED",
-                                timestamp, topic, count);
+                // Debug logging (controlled by logging framework configuration)
+                logger.debug("[{}] Message QUEUED for topic: {} (Total queued: {}) - DELIVERY NOT CONFIRMED", timestamp,
+                        topic, count);
 
-                        // WARNING: This only means the message was queued, not delivered!
-                        return CompletableFuture.completedFuture(null);
-                    } catch (Exception e) {
-                        String timestamp = LocalDateTime.now().format(FORMATTER.get());
-                        messagesFailedCount.incrementAndGet();
-                        lastFailure = timestamp + " - " + e.getMessage();
+                // WARNING: This only means the message was queued, not delivered!
+                return CompletableFuture.completedFuture(null);
+            }
+            catch (Exception e) {
+                String timestamp = LocalDateTime.now().format(FORMATTER.get());
+                messagesFailedCount.incrementAndGet();
+                lastFailure = timestamp + " - " + e.getMessage();
 
-                        // Error messages should always be logged, regardless of enableVerboseLogging
-                        logger.error("[{}] Failed to queue message: {} (Total failed: {})",
-                                timestamp, e.getMessage(), messagesFailedCount.get());
-                        return CompletableFuture.failedFuture(e);
-                    }
-                });
+                // Error messages should always be logged, regardless of enableVerboseLogging
+                logger.error("[{}] Failed to queue message: {} (Total failed: {})", timestamp, e.getMessage(),
+                        messagesFailedCount.get());
+                return CompletableFuture.failedFuture(e);
+            }
+        });
     }
 
     /**
@@ -236,7 +229,8 @@ public class DynamicAmqpMessagingService {
         try {
             String jsonMessage = objectMapper.writeValueAsString(object);
             return sendMessage(topic, jsonMessage);
-        } catch (JsonProcessingException e) {
+        }
+        catch (JsonProcessingException e) {
             logger.error("Failed to serialize object to JSON for topic: {}", topic, e);
             return CompletableFuture.failedFuture(new RuntimeException("JSON serialization failed", e));
         }
@@ -265,8 +259,8 @@ public class DynamicAmqpMessagingService {
 
     /**
      * Sends a message with acknowledgment tracking using Message acknowledgment.
-     * This provides better feedback about delivery status.
-     * Uses cached metadata for better performance.
+     * This provides better feedback about delivery status. Uses cached metadata for
+     * better performance.
      */
     public CompletionStage<Void> sendMessageWithConfirmation(String topic, String message) {
         if (topic == null || topic.trim().isEmpty()) {
@@ -284,16 +278,14 @@ public class DynamicAmqpMessagingService {
 
             // Get cached metadata or create new one
             Metadata baseMetadata = metadataCache.computeIfAbsent(topic,
-                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).withDurable(true).build()));
 
             // Create message with acknowledgment handling
-            Message<String> amqpMessage = Message.of(message)
-                    .withMetadata(baseMetadata)
-                    .withAck(() -> {
-                        logger.debug("✅ Message CONFIRMED delivered to topic: {}", topic);
-                        deliveryFuture.complete(null);
-                        return CompletableFuture.completedFuture(null);
-                    })
+            Message<String> amqpMessage = Message.of(message).withMetadata(baseMetadata).withAck(() -> {
+                logger.debug("✅ Message CONFIRMED delivered to topic: {}", topic);
+                deliveryFuture.complete(null);
+                return CompletableFuture.completedFuture(null);
+            })
                     // BE CAREFUL: we have seen this cause message broker issues but it is the
                     // proper way to handle acknowledgments
                     .withNack(reason -> {
@@ -308,16 +300,16 @@ public class DynamicAmqpMessagingService {
             emitter.send(amqpMessage);
 
             // Set a timeout for the delivery confirmation
-            CompletableFuture.delayedExecutor(30, TimeUnit.SECONDS)
-                    .execute(() -> {
-                        if (!deliveryFuture.isDone()) {
-                            deliveryFuture.completeExceptionally(
-                                    new RuntimeException("Message delivery timeout for topic: " + topic));
-                        }
-                    });
+            CompletableFuture.delayedExecutor(30, TimeUnit.SECONDS).execute(() -> {
+                if (!deliveryFuture.isDone()) {
+                    deliveryFuture.completeExceptionally(
+                            new RuntimeException("Message delivery timeout for topic: " + topic));
+                }
+            });
 
             return deliveryFuture;
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             String timestamp = LocalDateTime.now().format(FORMATTER.get());
             messagesFailedCount.incrementAndGet();
             lastFailure = timestamp + " - " + e.getMessage();
@@ -350,7 +342,8 @@ public class DynamicAmqpMessagingService {
         try {
             String jsonMessage = objectMapper.writeValueAsString(object);
             return sendMessageWithConfirmation(topic, jsonMessage);
-        } catch (JsonProcessingException e) {
+        }
+        catch (JsonProcessingException e) {
             logger.error("Failed to serialize object to JSON for topic: {}", topic, e);
             return CompletableFuture.failedFuture(new RuntimeException("JSON serialization failed", e));
         }
@@ -380,9 +373,9 @@ public class DynamicAmqpMessagingService {
     /**
      * Sends a message to the specified AMQP topic synchronously.
      * <p>
-     * IMPORTANT: This method uses sendMessageWithConfirmation() internally
-     * to wait for actual delivery confirmation, not just queuing.
-     * Use {@link #sendMessage(String, String)} for fire-and-forget behavior.
+     * IMPORTANT: This method uses sendMessageWithConfirmation() internally to wait
+     * for actual delivery confirmation, not just queuing. Use
+     * {@link #sendMessage(String, String)} for fire-and-forget behavior.
      * </p>
      *
      * @param topic   the name of the topic to send the message to
@@ -394,7 +387,8 @@ public class DynamicAmqpMessagingService {
             // Use the confirmation method to get real delivery feedback
             sendMessageWithConfirmation(topic, message).toCompletableFuture().join();
             logger.debug("Message synchronously delivered to topic: {}", topic);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.error("Failed to send message synchronously to topic {}: {}", topic, e.getMessage());
             throw new RuntimeException("Failed to send message synchronously to topic: " + topic, e);
         }
@@ -422,7 +416,8 @@ public class DynamicAmqpMessagingService {
         try {
             String jsonMessage = objectMapper.writeValueAsString(object);
             sendMessageSync(topic, jsonMessage);
-        } catch (JsonProcessingException e) {
+        }
+        catch (JsonProcessingException e) {
             logger.error("Failed to serialize object to JSON for topic: {}", topic, e);
             throw new RuntimeException("JSON serialization failed", e);
         }
@@ -432,8 +427,7 @@ public class DynamicAmqpMessagingService {
      * Sends a Jakarta JsonObject synchronously with delivery confirmation.
      * <p>
      * This method converts the Jakarta JsonObject to string and waits for delivery
-     * confirmation.
-     * Supports legacy code using Jakarta JSON.
+     * confirmation. Supports legacy code using Jakarta JSON.
      * </p>
      * 
      * @param topic      the name of the topic to send the message to
@@ -454,8 +448,8 @@ public class DynamicAmqpMessagingService {
      * fire-and-forget behavior.
      * <p>
      * This method only waits for the message to be queued locally, not for broker
-     * delivery.
-     * Use this when you want synchronous API but don't need delivery confirmation.
+     * delivery. Use this when you want synchronous API but don't need delivery
+     * confirmation.
      * </p>
      *
      * @param topic   the name of the topic to send the message to
@@ -467,7 +461,8 @@ public class DynamicAmqpMessagingService {
             // This completes immediately after queuing
             sendMessage(topic, message).toCompletableFuture().join();
             logger.debug("Message queued for topic: {}", topic);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.error("Failed to queue message for topic {}: {}", topic, e.getMessage());
             throw new RuntimeException("Failed to queue message for topic: " + topic, e);
         }
@@ -476,8 +471,8 @@ public class DynamicAmqpMessagingService {
     /**
      * Sends a Jackson-serializable object as JSON synchronously (fire-and-forget).
      * <p>
-     * This method converts the object to JSON and waits only for local queuing,
-     * not for broker delivery confirmation.
+     * This method converts the object to JSON and waits only for local queuing, not
+     * for broker delivery confirmation.
      * </p>
      * 
      * @param <T>    the type of object to serialize
@@ -494,7 +489,8 @@ public class DynamicAmqpMessagingService {
         try {
             String jsonMessage = objectMapper.writeValueAsString(object);
             sendMessageSyncFireAndForget(topic, jsonMessage);
-        } catch (JsonProcessingException e) {
+        }
+        catch (JsonProcessingException e) {
             logger.error("Failed to serialize object to JSON for topic: {}", topic, e);
             throw new RuntimeException("JSON serialization failed", e);
         }
@@ -504,9 +500,8 @@ public class DynamicAmqpMessagingService {
      * Sends a Jakarta JsonObject synchronously (fire-and-forget).
      * <p>
      * This method converts the Jakarta JsonObject to string and waits only for
-     * local queuing,
-     * not for broker delivery confirmation. Supports legacy code using Jakarta
-     * JSON.
+     * local queuing, not for broker delivery confirmation. Supports legacy code
+     * using Jakarta JSON.
      * </p>
      * 
      * @param topic      the name of the topic to send the message to
@@ -525,8 +520,8 @@ public class DynamicAmqpMessagingService {
     /**
      * Sends a message using a request object.
      * <p>
-     * Convenience method that accepts a {@link DynamicAmqpRequest} object.
-     * Uses fire-and-forget behavior (returns immediately after queuing).
+     * Convenience method that accepts a {@link DynamicAmqpRequest} object. Uses
+     * fire-and-forget behavior (returns immediately after queuing).
      * </p>
      *
      * @param request the request containing topic and message
@@ -537,8 +532,8 @@ public class DynamicAmqpMessagingService {
     }
 
     /**
-     * Gets a summary of all available sending methods and their behaviors.
-     * Useful for understanding which method to use in different scenarios.
+     * Gets a summary of all available sending methods and their behaviors. Useful
+     * for understanding which method to use in different scenarios.
      */
     public String getSendingMethodsSummary() {
         return """
@@ -572,8 +567,8 @@ public class DynamicAmqpMessagingService {
     }
 
     /**
-     * Sends multiple messages to the same topic efficiently.
-     * Uses cached metadata for better performance.
+     * Sends multiple messages to the same topic efficiently. Uses cached metadata
+     * for better performance.
      * 
      * @param topic    the target topic
      * @param messages array of messages to send
@@ -590,7 +585,7 @@ public class DynamicAmqpMessagingService {
         try {
             // Get cached metadata once for the entire batch
             Metadata metadata = metadataCache.computeIfAbsent(topic,
-                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).withDurable(true).build()));
 
             // Send all messages in batch
             for (String message : messages) {
@@ -604,12 +599,13 @@ public class DynamicAmqpMessagingService {
             String timestamp = LocalDateTime.now().format(FORMATTER.get());
             lastSuccessfulSend = timestamp;
 
-            logger.debug("[{}] Batch sent {} messages to topic: {} (Total: {})",
-                    timestamp, messages.length, topic, messagesSentCount.get());
+            logger.debug("[{}] Batch sent {} messages to topic: {} (Total: {})", timestamp, messages.length, topic,
+                    messagesSentCount.get());
 
             return CompletableFuture.completedFuture(null);
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             String timestamp = LocalDateTime.now().format(FORMATTER.get());
             messagesFailedCount.addAndGet(messages.length);
             lastFailure = timestamp + " - " + e.getMessage();
@@ -621,8 +617,8 @@ public class DynamicAmqpMessagingService {
     }
 
     /**
-     * Clears the metadata cache to free memory if needed.
-     * Useful for long-running applications with many dynamic topics.
+     * Clears the metadata cache to free memory if needed. Useful for long-running
+     * applications with many dynamic topics.
      */
     public void clearMetadataCache() {
         int size = metadataCache.size();

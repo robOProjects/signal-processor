@@ -15,11 +15,9 @@ import jakarta.enterprise.context.ApplicationScoped;
  * Dynamic topic tracking service that monitors dynamic topics created on the
  * fly.
  * <p>
- * This service works by:
- * 1. Tracking when messages are sent to dynamic topics
- * 2. Maintaining statistics for all dynamic topic activity
- * 3. Integrating with your DynamicAmqpMessagingService
- * 4. Processing all dynamic topics uniformly
+ * This service works by: 1. Tracking when messages are sent to dynamic topics
+ * 2. Maintaining statistics for all dynamic topic activity 3. Integrating with
+ * your DynamicAmqpMessagingService 4. Processing all dynamic topics uniformly
  * </p>
  * 
  * Call trackTopicUsage() from your messaging service when sending to dynamic
@@ -41,8 +39,8 @@ public class DynamicTopicTrackingService {
     private final ConcurrentHashMap<String, String> lastSentTimestamp = new ConcurrentHashMap<>();
 
     /**
-     * Call this method when sending a message to a dynamic topic.
-     * This tracks the topic usage and enables monitoring - now reactive!
+     * Call this method when sending a message to a dynamic topic. This tracks the
+     * topic usage and enables monitoring - now reactive!
      */
     public Uni<Void> trackTopicUsage(String topicName, String message) {
         return Uni.createFrom().item(() -> {
@@ -63,8 +61,7 @@ public class DynamicTopicTrackingService {
             logger.debug("📊 Dynamic topic '{}' message #{}: {}", topicName, count, message);
 
             return null;
-        })
-                .chain(ignored -> processDynamicTopicMessage(topicName, message));
+        }).chain(ignored -> processDynamicTopicMessage(topicName, message));
     }
 
     /**
@@ -95,12 +92,8 @@ public class DynamicTopicTrackingService {
         ConcurrentHashMap<String, Long> counts = new ConcurrentHashMap<>();
         topicMessageCounts.forEach((topic, counter) -> counts.put(topic, counter.get()));
 
-        return new DynamicTopicStats(
-                totalDynamicMessages.get(),
-                counts,
-                new ConcurrentHashMap<>(lastMessagePerTopic),
-                new ConcurrentHashMap<>(lastSentTimestamp),
-                new ConcurrentHashMap<>(dynamicTopics));
+        return new DynamicTopicStats(totalDynamicMessages.get(), counts, new ConcurrentHashMap<>(lastMessagePerTopic),
+                new ConcurrentHashMap<>(lastSentTimestamp), new ConcurrentHashMap<>(dynamicTopics));
     }
 
     /**
@@ -113,11 +106,8 @@ public class DynamicTopicTrackingService {
     /**
      * Record containing dynamic topic statistics.
      */
-    public record DynamicTopicStats(
-            long totalDynamicMessages,
-            ConcurrentHashMap<String, Long> topicMessageCounts,
-            ConcurrentHashMap<String, String> lastMessagePerTopic,
-            ConcurrentHashMap<String, String> lastSentTimestamp,
+    public record DynamicTopicStats(long totalDynamicMessages, ConcurrentHashMap<String, Long> topicMessageCounts,
+            ConcurrentHashMap<String, String> lastMessagePerTopic, ConcurrentHashMap<String, String> lastSentTimestamp,
             ConcurrentHashMap<String, Boolean> trackedTopics) {
     }
 }

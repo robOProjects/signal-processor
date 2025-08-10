@@ -87,18 +87,15 @@ public class DynamicAmqpResource {
     @Path("/health")
     @Produces(MediaType.APPLICATION_JSON)
     public CompletionStage<Response> healthCheck() {
-        return messagingService.performHealthCheck()
-                .thenApply(isHealthy -> {
-                    if (isHealthy) {
-                        return Response.ok()
-                                .entity("{\"status\":\"UP\",\"amqp\":\"connected\"}")
-                                .build();
-                    } else {
-                        return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-                                .entity("{\"status\":\"DOWN\",\"amqp\":\"disconnected\"}")
-                                .build();
-                    }
-                });
+        return messagingService.performHealthCheck().thenApply(isHealthy -> {
+            if (isHealthy) {
+                return Response.ok().entity("{\"status\":\"UP\",\"amqp\":\"connected\"}").build();
+            }
+            else {
+                return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                        .entity("{\"status\":\"DOWN\",\"amqp\":\"disconnected\"}").build();
+            }
+        });
     }
 
     /**
@@ -113,17 +110,10 @@ public class DynamicAmqpResource {
         var stats = messagingService.getMessageStats();
         boolean emitterReady = messagingService.isEmitterReady();
 
-        String statsJson = String.format(
-                "{\"messagesSent\":%d,\"messagesFailed\":%d,\"successRate\":%.2f," +
-                        "\"lastSuccessfulSend\":\"%s\",\"lastFailure\":\"%s\",\"emitterReady\":%b," +
-                        "\"cachedTopics\":%d}",
-                stats.messagesSent(),
-                stats.messagesFailed(),
-                stats.getSuccessRate(),
-                stats.lastSuccessfulSend(),
-                stats.lastFailure(),
-                emitterReady,
-                stats.cachedTopics());
+        String statsJson = String.format("{\"messagesSent\":%d,\"messagesFailed\":%d,\"successRate\":%.2f,"
+                + "\"lastSuccessfulSend\":\"%s\",\"lastFailure\":\"%s\",\"emitterReady\":%b," + "\"cachedTopics\":%d}",
+                stats.messagesSent(), stats.messagesFailed(), stats.getSuccessRate(), stats.lastSuccessfulSend(),
+                stats.lastFailure(), emitterReady, stats.cachedTopics());
 
         return Response.ok(statsJson).build();
     }
@@ -147,17 +137,14 @@ public class DynamicAmqpResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response sendBatch(BatchRequest request) {
         try {
-            messagingService.sendMessageBatch(request.topic(), request.messages())
-                    .toCompletableFuture().join();
-            return Response.accepted()
-                    .entity(String.format("Batch of %d messages sent to topic: %s",
-                            request.messages().length, request.topic()))
+            messagingService.sendMessageBatch(request.topic(), request.messages()).toCompletableFuture().join();
+            return Response.accepted().entity(
+                    String.format("Batch of %d messages sent to topic: %s", request.messages().length, request.topic()))
                     .build();
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Failed to send batch: " + e.getMessage());
-            return Response.serverError()
-                    .entity("Failed to send batch: " + e.getMessage())
-                    .build();
+            return Response.serverError().entity("Failed to send batch: " + e.getMessage()).build();
         }
     }
 
@@ -173,20 +160,18 @@ public class DynamicAmqpResource {
         var stats = testConsumer.getConsumerStats();
 
         String statsJson = String.format(
-                "{\"messagesReceived\":%d,\"lastMessageReceived\":\"%s\"," +
-                        "\"lastMessageTimestamp\":\"%s\",\"topicCounts\":%s}",
-                stats.messagesReceived(),
-                stats.lastMessageReceived().replace("\"", "\\\""),
-                stats.lastMessageTimestamp(),
-                stats.topicCounts().toString());
+                "{\"messagesReceived\":%d,\"lastMessageReceived\":\"%s\","
+                        + "\"lastMessageTimestamp\":\"%s\",\"topicCounts\":%s}",
+                stats.messagesReceived(), stats.lastMessageReceived().replace("\"", "\\\""),
+                stats.lastMessageTimestamp(), stats.topicCounts().toString());
 
         return Response.ok(statsJson).build();
     }
 
     /**
      * Comprehensive subscriber statistics endpoint showing all received message
-     * metrics.
-     * This includes all topics being monitored by the MessageSubscriberService.
+     * metrics. This includes all topics being monitored by the
+     * MessageSubscriberService.
      *
      * @return a Response with comprehensive subscriber statistics
      */
@@ -216,8 +201,8 @@ public class DynamicAmqpResource {
         for (var entry : stats.lastMessagePerTopic().entrySet()) {
             if (!first)
                 json.append(",");
-            json.append("\"").append(entry.getKey()).append("\":\"")
-                    .append(entry.getValue().replace("\"", "\\\"")).append("\"");
+            json.append("\"").append(entry.getKey()).append("\":\"").append(entry.getValue().replace("\"", "\\\""))
+                    .append("\"");
             first = false;
         }
         json.append("},");
@@ -268,8 +253,8 @@ public class DynamicAmqpResource {
         for (var entry : stats.lastMessagePerTopic().entrySet()) {
             if (!first)
                 json.append(",");
-            json.append("\"").append(entry.getKey()).append("\":\"")
-                    .append(entry.getValue().replace("\"", "\\\"")).append("\"");
+            json.append("\"").append(entry.getKey()).append("\":\"").append(entry.getValue().replace("\"", "\\\""))
+                    .append("\"");
             first = false;
         }
         json.append("},");
@@ -302,10 +287,9 @@ public class DynamicAmqpResource {
      * Handles HTTP POST requests to send a message to a dynamically specified AMQP
      * topic.
      * <p>
-     * Expects a {@link DynamicAmqpRequest} containing
-     * the target topic and message payload.
-     * The message is sent to the specified topic using the injected messaging
-     * service.
+     * Expects a {@link DynamicAmqpRequest} containing the target topic and message
+     * payload. The message is sent to the specified topic using the injected
+     * messaging service.
      * </p>
      *
      * @param request the request containing the topic and message to send
@@ -318,9 +302,10 @@ public class DynamicAmqpResource {
     public Response sendToDynamicTopic(DynamicAmqpRequest request) {
         try {
             messagingService.sendMessageSync(request.topic(), request.message());
-            return Response.accepted().entity("Message QUEUED to topic: " + request.topic() +
-                    " (delivery not confirmed)").build();
-        } catch (Exception e) {
+            return Response.accepted()
+                    .entity("Message QUEUED to topic: " + request.topic() + " (delivery not confirmed)").build();
+        }
+        catch (Exception e) {
             System.err.println("Failed to send message: " + e.getMessage());
             e.printStackTrace();
             return Response.serverError().entity("Failed to send message: " + e.getMessage()).build();
@@ -328,21 +313,19 @@ public class DynamicAmqpResource {
     }
 
     /**
-     * Sends a message with delivery confirmation.
-     * This endpoint waits for actual delivery confirmation from the broker.
+     * Sends a message with delivery confirmation. This endpoint waits for actual
+     * delivery confirmation from the broker.
      */
     @POST
     @Path("/send-confirmed")
     @Consumes(MediaType.APPLICATION_JSON)
-    public CompletionStage<Response> sendToDynamicTopicConfirmed(
-            DynamicAmqpRequest request) {
-        return messagingService.sendMessageWithConfirmation(request.topic(), request.message())
-                .thenApply(result -> Response.ok().entity("Message CONFIRMED delivered to topic: " + request.topic())
-                        .build())
+    public CompletionStage<Response> sendToDynamicTopicConfirmed(DynamicAmqpRequest request) {
+        return messagingService.sendMessageWithConfirmation(request.topic(), request.message()).thenApply(
+                result -> Response.ok().entity("Message CONFIRMED delivered to topic: " + request.topic()).build())
                 .exceptionally(throwable -> {
                     System.err.println("Failed to deliver message: " + throwable.getMessage());
-                    return Response.serverError()
-                            .entity("Failed to deliver message: " + throwable.getMessage()).build();
+                    return Response.serverError().entity("Failed to deliver message: " + throwable.getMessage())
+                            .build();
                 });
     }
 
@@ -356,13 +339,10 @@ public class DynamicAmqpResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public CompletionStage<Response> sendJacksonObject(TestMessage message) {
-        return messagingService.sendMessage("test-jackson-topic", message)
-                .thenApply(unused -> Response.ok()
-                        .entity("Jackson message sent successfully: " + message.toString())
-                        .build())
+        return messagingService.sendMessage("test-jackson-topic", message).thenApply(
+                unused -> Response.ok().entity("Jackson message sent successfully: " + message.toString()).build())
                 .exceptionally(throwable -> Response.serverError()
-                        .entity("Failed to send Jackson message: " + throwable.getMessage())
-                        .build());
+                        .entity("Failed to send Jackson message: " + throwable.getMessage()).build());
     }
 
     /**
@@ -372,22 +352,16 @@ public class DynamicAmqpResource {
     @Path("/send-jakarta-json")
     @Produces(MediaType.APPLICATION_JSON)
     public Response sendJakartaJsonObject() {
-        JsonObject jsonObject = Json.createObjectBuilder()
-                .add("id", "jakarta-test-" + System.currentTimeMillis())
+        JsonObject jsonObject = Json.createObjectBuilder().add("id", "jakarta-test-" + System.currentTimeMillis())
                 .add("content", "This is a Jakarta JsonObject test message")
-                .add("timestamp", System.currentTimeMillis())
-                .add("priority", 1)
-                .build();
+                .add("timestamp", System.currentTimeMillis()).add("priority", 1).build();
 
         try {
             messagingService.sendMessage("test-jakarta-topic", jsonObject);
-            return Response.ok()
-                    .entity("Jakarta JsonObject sent successfully: " + jsonObject.toString())
-                    .build();
-        } catch (Exception e) {
-            return Response.serverError()
-                    .entity("Failed to send Jakarta JsonObject: " + e.getMessage())
-                    .build();
+            return Response.ok().entity("Jakarta JsonObject sent successfully: " + jsonObject.toString()).build();
+        }
+        catch (Exception e) {
+            return Response.serverError().entity("Failed to send Jakarta JsonObject: " + e.getMessage()).build();
         }
     }
 
@@ -399,13 +373,10 @@ public class DynamicAmqpResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public CompletionStage<Response> sendJacksonWithConfirmation(TestMessage message) {
-        return messagingService.sendMessageWithConfirmation("test-jackson-confirmed-topic", message)
-                .thenApply(unused -> Response.ok()
-                        .entity("Jackson message confirmed delivered: " + message.toString())
-                        .build())
+        return messagingService.sendMessageWithConfirmation("test-jackson-confirmed-topic", message).thenApply(
+                unused -> Response.ok().entity("Jackson message confirmed delivered: " + message.toString()).build())
                 .exceptionally(throwable -> Response.serverError()
-                        .entity("Failed to deliver Jackson message: " + throwable.getMessage())
-                        .build());
+                        .entity("Failed to deliver Jackson message: " + throwable.getMessage()).build());
     }
 
     /**
@@ -418,12 +389,10 @@ public class DynamicAmqpResource {
     public Response sendJacksonSync(TestMessage message) {
         try {
             messagingService.sendMessageSync("test-jackson-sync-topic", message);
-            return Response.ok()
-                    .entity("Jackson message synchronously delivered: " + message.toString())
-                    .build();
-        } catch (Exception e) {
-            return Response.serverError()
-                    .entity("Failed to synchronously send Jackson message: " + e.getMessage())
+            return Response.ok().entity("Jackson message synchronously delivered: " + message.toString()).build();
+        }
+        catch (Exception e) {
+            return Response.serverError().entity("Failed to synchronously send Jackson message: " + e.getMessage())
                     .build();
         }
     }

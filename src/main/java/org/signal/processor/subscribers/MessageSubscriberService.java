@@ -46,13 +46,13 @@ public class MessageSubscriberService {
             String timestamp = LocalDateTime.now().format(FORMATTER);
             long count = incrementTopicCount(topic);
 
-            logger.info("📨 [{}] RECEIVED Jackson message #{} from {}: {}",
-                    timestamp, count, topic, message);
+            logger.info("📨 [{}] RECEIVED Jackson message #{} from {}: {}", timestamp, count, topic, message);
 
             processTestMessage(message, topic);
             updateStatistics(topic, rawMessage, timestamp);
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.error("❌ Failed to process Jackson message from {}: {}", topic, e.getMessage());
         }
     }
@@ -69,13 +69,13 @@ public class MessageSubscriberService {
             String timestamp = LocalDateTime.now().format(FORMATTER);
             long count = incrementTopicCount(topic);
 
-            logger.info("✅ [{}] RECEIVED CONFIRMED Jackson message #{} from {}: {}",
-                    timestamp, count, topic, message);
+            logger.info("✅ [{}] RECEIVED CONFIRMED Jackson message #{} from {}: {}", timestamp, count, topic, message);
 
             processConfirmedMessage(message, topic);
             updateStatistics(topic, rawMessage, timestamp);
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.error("❌ Failed to process confirmed Jackson message from {}: {}", topic, e.getMessage());
         }
     }
@@ -92,13 +92,14 @@ public class MessageSubscriberService {
             String timestamp = LocalDateTime.now().format(FORMATTER);
             long count = incrementTopicCount(topic);
 
-            logger.info("🔔 [{}] RECEIVED customer notification #{} from {}: {}",
-                    timestamp, count, topic, notification);
+            logger.info("🔔 [{}] RECEIVED customer notification #{} from {}: {}", timestamp, count, topic,
+                    notification);
 
             processCustomerNotification(notification, topic);
             updateStatistics(topic, rawMessage, timestamp);
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.error("❌ Failed to process customer notification from {}: {}", topic, e.getMessage());
         }
     }
@@ -143,19 +144,14 @@ public class MessageSubscriberService {
         ConcurrentHashMap<String, Long> counts = new ConcurrentHashMap<>();
         topicCounts.forEach((topic, counter) -> counts.put(topic, counter.get()));
 
-        return new SubscriberStats(
-                totalMessagesReceived.get(),
-                counts,
-                new ConcurrentHashMap<>(lastMessagePerTopic),
+        return new SubscriberStats(totalMessagesReceived.get(), counts, new ConcurrentHashMap<>(lastMessagePerTopic),
                 new ConcurrentHashMap<>(lastTimestampPerTopic));
     }
 
     /**
      * Record containing subscriber statistics.
      */
-    public record SubscriberStats(
-            long totalMessagesReceived,
-            ConcurrentHashMap<String, Long> messageCountsByTopic,
+    public record SubscriberStats(long totalMessagesReceived, ConcurrentHashMap<String, Long> messageCountsByTopic,
             ConcurrentHashMap<String, String> lastMessagePerTopic,
             ConcurrentHashMap<String, String> lastTimestampPerTopic) {
     }

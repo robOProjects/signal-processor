@@ -1,0 +1,84 @@
+quarkus:
+  http:
+    port: 8081
+  log:
+    category:
+      "org.signal.processor.amqp.DynamicAmqpMessagingService":
+        level: INFO
+        # To see debug messages from the messaging service, change to DEBUG:
+        # level: DEBUG
+
+mp:
+  messaging:
+    connector:
+      smallrye-amqp:
+        host: localhost
+        port: 5672
+        username: admin
+        password: admin
+        max-inflight-messages: 10000
+        use-nio: true
+        connect-timeout: 60000
+
+    outgoing:
+      dynamic-sender:
+        connector: smallrye-amqp
+        address: test-topic
+        durable: false
+        use-anonymous-sender: false
+
+    incoming:
+      test-consumer:
+        connector: smallrye-amqp
+        address: test-topic
+        durable: false
+
+      jackson-topic-consumer:
+        connector: smallrye-amqp
+        address: test-jackson-topic
+        durable: false
+
+      jackson-confirmed-consumer:
+        connector: smallrye-amqp
+        address: test-jackson-confirmed-topic
+        durable: false
+
+      jackson-sync-consumer:
+        connector: smallrye-amqp
+        address: test-jackson-sync-topic
+        durable: false
+
+      jakarta-topic-consumer:
+        connector: smallrye-amqp
+        address: test-jakarta-topic
+        durable: false
+
+      customer-notifications-consumer:
+        connector: smallrye-amqp
+        address: customer-notifications
+        durable: false
+
+      user-logins-consumer:
+        connector: smallrye-amqp
+        address: user-logins
+        durable: false
+
+      user-purchases-consumer:
+        connector: smallrye-amqp
+        address: user-purchases
+        durable: false
+
+      support-requests-consumer:
+        connector: smallrye-amqp
+        address: support-requests
+        durable: false
+
+      user-activities-consumer:
+        connector: smallrye-amqp
+        address: user-activities
+        durable: false
+
+      order-events-consumer:
+        connector: smallrye-amqp
+        address: order-events
+        durable: false

@@ -38,7 +38,8 @@ public class OrderEventService {
                 .whenComplete((result, throwable) -> {
                     if (throwable != null) {
                         logger.error("Failed to publish order event {}: {}", orderId, throwable.getMessage());
-                    } else {
+                    }
+                    else {
                         logger.debug("Order event published: {}", event);
                     }
                 });
@@ -52,8 +53,7 @@ public class OrderEventService {
 
         // Use confirmation for critical events
         return messagingService.sendMessageWithConfirmation("order-confirmations", event)
-                .thenRun(() -> logger.info("✅ Order confirmation delivered: {}", orderId))
-                .exceptionally(throwable -> {
+                .thenRun(() -> logger.info("✅ Order confirmation delivered: {}", orderId)).exceptionally(throwable -> {
                     logger.error("❌ CRITICAL: Failed to confirm order {}: {}", orderId, throwable.getMessage());
                     // Could trigger fallback logic here
                     return null;
@@ -64,17 +64,15 @@ public class OrderEventService {
      * Synchronous payment processing (blocks until delivered).
      */
     public void processPaymentSync(String orderId, BigDecimal amount) {
-        Map<String, Object> paymentData = Map.of(
-                "orderId", orderId,
-                "amount", amount,
-                "timestamp", LocalDateTime.now().toString(),
-                "processor", "stripe");
+        Map<String, Object> paymentData = Map.of("orderId", orderId, "amount", amount, "timestamp",
+                LocalDateTime.now().toString(), "processor", "stripe");
 
         try {
             // Synchronous delivery for payment events
             messagingService.sendMessageSync("payments", paymentData); // T = Map<String,Object>
             logger.info("💳 Payment processed synchronously: {} for ${}", orderId, amount);
-        } catch (RuntimeException e) {
+        }
+        catch (RuntimeException e) {
             logger.error("💳 PAYMENT FAILED for order {}: {}", orderId, e.getMessage());
             throw new RuntimeException("Payment processing failed", e);
         }
@@ -85,11 +83,7 @@ public class OrderEventService {
      */
     public void sendCustomerNotifications(String[] customerIds, String message) {
         for (String customerId : customerIds) {
-            TestMessage notification = new TestMessage(
-                    "notif-" + customerId,
-                    message,
-                    System.currentTimeMillis(),
-                    1);
+            TestMessage notification = new TestMessage("notif-" + customerId, message, System.currentTimeMillis(), 1);
 
             // Fire-and-forget for notifications
             messagingService.sendMessage("customer-notifications", notification) // T = TestMessage
@@ -107,11 +101,8 @@ public class OrderEventService {
      * Analytics event with custom serialization.
      */
     public void trackAnalyticsEvent(String eventName, Map<String, Object> properties) {
-        Map<String, Object> analyticsEvent = Map.of(
-                "event", eventName,
-                "properties", properties,
-                "timestamp", System.currentTimeMillis(),
-                "sessionId", generateSessionId());
+        Map<String, Object> analyticsEvent = Map.of("event", eventName, "properties", properties, "timestamp",
+                System.currentTimeMillis(), "sessionId", generateSessionId());
 
         // Analytics can be fire-and-forget
         messagingService.sendMessage("analytics", analyticsEvent) // T = Map<String,Object>

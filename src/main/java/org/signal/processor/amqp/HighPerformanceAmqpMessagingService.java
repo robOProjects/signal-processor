@@ -20,12 +20,10 @@ import java.util.concurrent.atomic.LongAdder;
  * scenarios.
  * <p>
  * This service is designed to handle thousands of messages per second with
- * minimal overhead.
- * Key optimizations:
- * - Metadata caching to avoid object creation
- * - LongAdder for better concurrent performance than AtomicLong
- * - Conditional logging to reduce I/O overhead
- * - Pre-validated topics to skip validation on hot paths
+ * minimal overhead. Key optimizations: - Metadata caching to avoid object
+ * creation - LongAdder for better concurrent performance than AtomicLong -
+ * Conditional logging to reduce I/O overhead - Pre-validated topics to skip
+ * validation on hot paths
  * </p>
  */
 @ApplicationScoped
@@ -49,14 +47,14 @@ public class HighPerformanceAmqpMessagingService {
     private volatile int logEveryNthMessage = 1000; // Log every 1000th message by default
 
     /**
-     * High-performance message sending with minimal overhead.
-     * Optimized for throughput over individual message tracking.
+     * High-performance message sending with minimal overhead. Optimized for
+     * throughput over individual message tracking.
      */
     public void sendMessageFast(String topic, String message) {
         try {
             // Get cached metadata or create new one
             Metadata metadata = metadataCache.computeIfAbsent(topic,
-                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).withDurable(true).build()));
 
             // Create message with cached metadata
             Message<String> amqpMessage = Message.of(message).withMetadata(metadata);
@@ -73,7 +71,8 @@ public class HighPerformanceAmqpMessagingService {
                 logger.info("📊 Sent {} messages (current topic: {})", count, topic);
             }
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             messagesFailedCount.increment();
             if (enableDetailedLogging) {
                 logger.error("❌ Failed to send message to {}: {}", topic, e.getMessage());
@@ -82,8 +81,8 @@ public class HighPerformanceAmqpMessagingService {
     }
 
     /**
-     * Batch message sending for maximum throughput.
-     * Sends multiple messages to the same topic efficiently.
+     * Batch message sending for maximum throughput. Sends multiple messages to the
+     * same topic efficiently.
      */
     public void sendMessageBatch(String topic, String[] messages) {
         if (messages == null || messages.length == 0) {
@@ -93,7 +92,7 @@ public class HighPerformanceAmqpMessagingService {
         try {
             // Get cached metadata once for the entire batch
             Metadata metadata = metadataCache.computeIfAbsent(topic,
-                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).withDurable(true).build()));
 
             // Send all messages in batch
             for (String message : messages) {
@@ -106,7 +105,8 @@ public class HighPerformanceAmqpMessagingService {
                 logger.info("📦 Batch sent {} messages to topic: {}", messages.length, topic);
             }
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             messagesFailedCount.add(messages.length);
             if (enableDetailedLogging) {
                 logger.error("❌ Failed to send batch to {}: {}", topic, e.getMessage());
@@ -127,7 +127,7 @@ public class HighPerformanceAmqpMessagingService {
     public void preWarmTopics(String... topics) {
         for (String topic : topics) {
             metadataCache.computeIfAbsent(topic,
-                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).build()));
+                    t -> Metadata.of(OutgoingAmqpMetadata.builder().withAddress(t).withDurable(true).build()));
         }
         logger.info("🔥 Pre-warmed {} topics in metadata cache", topics.length);
     }
@@ -145,12 +145,8 @@ public class HighPerformanceAmqpMessagingService {
      * Gets high-performance statistics.
      */
     public HighPerfStats getStats() {
-        return new HighPerfStats(
-                messagesSentCount.sum(),
-                messagesFailedCount.sum(),
-                metadataCache.size(),
-                enableDetailedLogging,
-                logEveryNthMessage);
+        return new HighPerfStats(messagesSentCount.sum(), messagesFailedCount.sum(), metadataCache.size(),
+                enableDetailedLogging, logEveryNthMessage);
     }
 
     /**
@@ -159,8 +155,7 @@ public class HighPerformanceAmqpMessagingService {
     public void configurePerformance(boolean enableLogging, int logInterval) {
         this.enableDetailedLogging = enableLogging;
         this.logEveryNthMessage = logInterval;
-        logger.info("⚙️ Performance configured: logging={}, interval={}",
-                enableLogging, logInterval);
+        logger.info("⚙️ Performance configured: logging={}, interval={}", enableLogging, logInterval);
     }
 
     /**
@@ -169,7 +164,8 @@ public class HighPerformanceAmqpMessagingService {
     public boolean canSendMore() {
         try {
             return emitter.hasRequests() && !emitter.isCancelled();
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             return false;
         }
     }
@@ -177,12 +173,8 @@ public class HighPerformanceAmqpMessagingService {
     /**
      * Performance statistics record.
      */
-    public record HighPerfStats(
-            long totalMessagesSent,
-            long totalMessagesFailed,
-            int cachedTopics,
-            boolean detailedLoggingEnabled,
-            int logInterval) {
+    public record HighPerfStats(long totalMessagesSent, long totalMessagesFailed, int cachedTopics,
+            boolean detailedLoggingEnabled, int logInterval) {
         public double getSuccessRate() {
             long total = totalMessagesSent + totalMessagesFailed;
             return total == 0 ? 100.0 : (double) totalMessagesSent / total * 100.0;

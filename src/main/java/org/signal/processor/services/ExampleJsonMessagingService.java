@@ -23,48 +23,41 @@ public class ExampleJsonMessagingService {
     DynamicAmqpMessagingService messagingService;
 
     /**
-     * Modern approach using Jackson with POJOs.
-     * Recommended for new code.
+     * Modern approach using Jackson with POJOs. Recommended for new code.
      */
     public void sendUserNotification(String userId, String message) {
-        TestMessage notification = new TestMessage(
-                "user-" + userId,
-                message,
-                System.currentTimeMillis(),
-                1);
+        TestMessage notification = new TestMessage("user-" + userId, message, System.currentTimeMillis(), 1);
 
         try {
             // Fire-and-forget with JSON serialization
             messagingService.sendMessage("user-notifications", notification);
             logger.info("User notification queued for user: {}", userId);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.error("Failed to send user notification for user {}: {}", userId, e.getMessage());
         }
     }
 
     /**
-     * Approach using Jakarta JsonObject.
-     * Use this when integrating with existing Jakarta JSON code.
+     * Approach using Jakarta JsonObject. Use this when integrating with existing
+     * Jakarta JSON code.
      */
     public void sendLegacyAlert(String alertType, String description) {
-        JsonObject alert = Json.createObjectBuilder()
-                .add("alertType", alertType)
-                .add("description", description)
-                .add("timestamp", System.currentTimeMillis())
-                .add("severity", "HIGH")
-                .build();
+        JsonObject alert = Json.createObjectBuilder().add("alertType", alertType).add("description", description)
+                .add("timestamp", System.currentTimeMillis()).add("severity", "HIGH").build();
 
         try {
             // With delivery confirmation
-            messagingService.sendMessageWithConfirmation("system-alerts", alert)
-                    .whenComplete((result, throwable) -> {
-                        if (throwable != null) {
-                            logger.error("Failed to deliver alert {}: {}", alertType, throwable.getMessage());
-                        } else {
-                            logger.info("Alert delivered successfully: {}", alertType);
-                        }
-                    });
-        } catch (Exception e) {
+            messagingService.sendMessageWithConfirmation("system-alerts", alert).whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    logger.error("Failed to deliver alert {}: {}", alertType, throwable.getMessage());
+                }
+                else {
+                    logger.info("Alert delivered successfully: {}", alertType);
+                }
+            });
+        }
+        catch (Exception e) {
             logger.error("Failed to send alert {}: {}", alertType, e.getMessage());
         }
     }
@@ -77,7 +70,8 @@ public class ExampleJsonMessagingService {
             // Synchronous delivery with Jackson serialization
             messagingService.sendMessageSync("critical-updates", updateData);
             logger.info("Critical update delivered synchronously: {}", updateId);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             logger.error("CRITICAL: Failed to deliver update {}: {}", updateId, e.getMessage());
             throw new RuntimeException("Critical update delivery failed", e);
         }
@@ -88,19 +82,14 @@ public class ExampleJsonMessagingService {
      */
     public void sendBatchNotifications(String[] userIds, String message) {
         for (String userId : userIds) {
-            TestMessage notification = new TestMessage(
-                    "batch-" + userId,
-                    message,
-                    System.currentTimeMillis(),
-                    2);
+            TestMessage notification = new TestMessage("batch-" + userId, message, System.currentTimeMillis(), 2);
 
             // Fire-and-forget for batch processing
-            messagingService.sendMessage("batch-notifications", notification)
-                    .whenComplete((result, throwable) -> {
-                        if (throwable != null) {
-                            logger.warn("Failed to queue notification for user {}: {}", userId, throwable.getMessage());
-                        }
-                    });
+            messagingService.sendMessage("batch-notifications", notification).whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    logger.warn("Failed to queue notification for user {}: {}", userId, throwable.getMessage());
+                }
+            });
         }
 
         logger.info("Queued {} batch notifications", userIds.length);
