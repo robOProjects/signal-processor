@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "signal-processor.fullname" . }}-config
+data:
+  application.yaml: |-
+    quarkus:
+      http:
+        port: {{ .Values.quarkus.http.port | default 8081 }}
+      log:
+        category:
+          "org.signal.processor.amqp.DynamicAmqpMessagingService":
+            level: {{ .Values.quarkus.log.level | default "INFO" }}
+    mp:
+      messaging:
+        connector:
+          smallrye-amqp:
+            host: {{ .Values.amqp.host | default "localhost" }}
+            port: {{ .Values.amqp.port | default 5672 }}
+            username: ${AMQP_USERNAME:admin}
+            password: ${AMQP_PASSWORD:admin}
+            max-inflight-messages: {{ .Values.amqp.maxInflight | default 10000 }}
+            use-nio: true
+            connect-timeout: 60000
+        outgoing:
+          dynamic-sender:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.outgoing.dynamicSender.address | default "test-topic" | quote }}
+            durable: false
+            use-anonymous-sender: false
+        incoming:
+          test-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.testConsumer.address | default "test-topic" | quote }}
+            durable: false
+          jackson-topic-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.jacksonTopicConsumer.address | default "test-jackson-topic" | quote }}
+            durable: false
+          jackson-confirmed-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.jacksonConfirmedConsumer.address | default "test-jackson-confirmed-topic" | quote }}
+            durable: false
+          jackson-sync-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.jacksonSyncConsumer.address | default "test-jackson-sync-topic" | quote }}
+            durable: false
+          jakarta-topic-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.jakartaTopicConsumer.address | default "test-jakarta-topic" | quote }}
+            durable: false
+          customer-notifications-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.customerNotificationsConsumer.address | default "customer-notifications" | quote }}
+            durable: false
+          user-logins-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.userLoginsConsumer.address | default "user-logins" | quote }}
+            durable: false
+          user-purchases-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.userPurchasesConsumer.address | default "user-purchases" | quote }}
+            durable: false
+          support-requests-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.supportRequestsConsumer.address | default "support-requests" | quote }}
+            durable: false
+          user-activities-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.userActivitiesConsumer.address | default "user-activities" | quote }}
+            durable: false
+          order-events-consumer:
+            connector: smallrye-amqp
+            address: {{ .Values.amqp.incoming.orderEventsConsumer.address | default "order-events" | quote }}
+            durable: false
